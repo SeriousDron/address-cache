@@ -33,6 +33,8 @@ trait Cache[E] {
 
 /** Cache for InetAddress objects with given expiration and stack-like access
  *
+ * Expects to have much more reads than write so do cleanup on writes
+ *
  * @author Andrey Petrenko
  */
 class AddressCache(maxAge: Long, unit: TimeUnit) extends Cache[InetAddress] {
@@ -66,10 +68,12 @@ class AddressCache(maxAge: Long, unit: TimeUnit) extends Cache[InetAddress] {
       case _ => false
     }
 
-    def isExpired: Boolean = expiresAt > System.nanoTime()
+    def isExpired: Boolean = expiresAt < System.nanoTime()
   }
 
   /** Adds element to cache. Ignores existing elements
+   *
+   * Does cleanup before adding
    *
    * @param address Address to add. Ignores if address is already in cache
    * @return true if element was successfully added or false if already existed
@@ -78,6 +82,7 @@ class AddressCache(maxAge: Long, unit: TimeUnit) extends Cache[InetAddress] {
     val entry = Entry(address)
     rwLock.writeLock().lock()
     try {
+      cleanup()
       val added: Boolean = items.add(entry) //Return false is element already exists
       if (added) {
         notEmpty.signal()
@@ -90,12 +95,15 @@ class AddressCache(maxAge: Long, unit: TimeUnit) extends Cache[InetAddress] {
 
   /** Removes element from cache and returns true. In case element is not in cache ignores (as you reached your desired state)
    *
+   * Does cleanup before removing
+   *
    * @param address Address to remove from cache
    */
   override def remove(address: InetAddress): Boolean = {
     val entry = Entry(address)
     rwLock.writeLock().lock()
     try {
+      cleanup()
       items.remove(entry)
       true
     } finally {
@@ -107,22 +115,58 @@ class AddressCache(maxAge: Long, unit: TimeUnit) extends Cache[InetAddress] {
   override def peek(): Option[InetAddress] = {
     rwLock.readLock().lock()
     try {
-      items.lastOption map (_.address)
+      val last = items.lastOption
+      if (last.isEmpty || !last.get.isExpired) {
+        //Otherwise all entries are expired and we need to cleanup
+        return items.lastOption map (_.address)
+      }
     } finally {
       rwLock.readLock().unlock()
     }
+    //We need to release read lock before trying to acquire write. So cleanup is after finally
+    cleanAll()
+    None
   }
 
   /** Returns and removes last element added to cache. Blocks in case cache is empty until first element to come */
   override def take(): InetAddress = {
+    def allExpiredWithClean: Boolean = if (items.last.isExpired) {
+      cleanAll(); true
+    } else false
+
     rwLock.writeLock().lock()
     try {
-      while (items.isEmpty) {
+      while (items.isEmpty || allExpiredWithClean) {
         notEmpty.await()
       }
       val last = items.last
       items.remove(last)
       last.address
+    } finally {
+      rwLock.writeLock().unlock()
+    }
+  }
+
+  /** Optimized method for cleaning whole cache
+   *
+   * Should be called in very rare case when on read we've found that all entries are expired
+   */
+  protected def cleanAll(): Unit = {
+    rwLock.writeLock().lock()
+    try {
+      items.clear()
+    } finally {
+      rwLock.writeLock().unlock()
+    }
+  }
+
+  /** Cleans up expired elements from the cache  */
+  protected def cleanup(): Unit = {
+    rwLock.writeLock().lock()
+    try {
+      while (items.nonEmpty && items.head.isExpired) {
+        items.remove(items.head)
+      }
     } finally {
       rwLock.writeLock().unlock()
     }
