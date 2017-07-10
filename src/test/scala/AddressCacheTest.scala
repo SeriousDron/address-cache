@@ -5,6 +5,15 @@ import java.util.concurrent.TimeUnit
 
 class AddressCacheTest extends FunSuite {
 
+  test("TTL should be positive value") {
+    assertThrows[IllegalArgumentException] {
+      val cache = new AddressCache(-5, TimeUnit.SECONDS)
+    }
+    assertThrows[IllegalArgumentException] {
+      val cache = new AddressCache(0, TimeUnit.SECONDS)
+    }
+  }
+
   test("Address cache adds object successfully") {
     val addr = InetAddress.getLoopbackAddress
     val cache = new AddressCache(5, TimeUnit.SECONDS)
@@ -19,7 +28,18 @@ class AddressCacheTest extends FunSuite {
     val cache = new AddressCache(5, TimeUnit.SECONDS)
 
     cache.add(addr)
+    assert(cache.add(addr) === false)
+    assert(cache.take() === addr)
+    assert(cache.peek().isEmpty)
+  }
+
+  test("Address cache ignore object with same address added twice") {
+    val addr = InetAddress.getByAddress(Array[Byte](0x7f, 0x00, 0x00, 0x03))
+    val addr2 = InetAddress.getByAddress(Array[Byte](0x7f, 0x00, 0x00, 0x03))
+    val cache = new AddressCache(5, TimeUnit.SECONDS)
+
     cache.add(addr)
+    assert(cache.add(addr2) === false)
     assert(cache.take() === addr)
     assert(cache.peek().isEmpty)
   }
