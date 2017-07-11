@@ -1,35 +1,12 @@
+package model
+
 import java.net.InetAddress
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.{Condition, ReadWriteLock, ReentrantReadWriteLock}
 
 import scala.collection.mutable
 
-trait Cache[E] {
-
-  /** Adds element in cache and returns if it was successfully added
-   *
-   * @param el Element to add
-   */
-  def add(el: E): Boolean
-
-  /** Removes element from cache and returns if it was successfully removed
-   *
-   * @param el Element to remove
-   */
-  def remove(el: E): Boolean
-
-  /** Returns last added element or None
-   *
-   * @return Last element added or None
-   */
-  def peek(): Option[E]
-
-  /**
-   * Returns last element added. Blocks and wait if there are no elements
-   *
-   */
-  def take(): E
-}
+trait AddressCache extends Cache[InetAddress]
 
 /** Cache for InetAddress objects with given expiration and stack-like access
  *
@@ -37,7 +14,7 @@ trait Cache[E] {
  *
  * @author Andrey Petrenko
  */
-class AddressCache(maxAge: Long, unit: TimeUnit) extends Cache[InetAddress] {
+class AddressCacheExpiring(maxAge: Long, unit: TimeUnit) extends AddressCache {
 
   if (maxAge <= 0) throw new IllegalArgumentException("Cache TTL should be positive number")
 

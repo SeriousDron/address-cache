@@ -1,8 +1,9 @@
 import java.lang.Thread.State
 import java.net.InetAddress
+import java.util.concurrent.{CountDownLatch, TimeUnit}
 
-import org.scalatest.{AsyncFunSuite, FunSuite}
-import java.util.concurrent.{Callable, CountDownLatch, FutureTask, TimeUnit}
+import model.AddressCacheExpiring
+import org.scalatest.AsyncFunSuite
 
 import scala.concurrent.{Future, Promise}
 
@@ -10,7 +11,7 @@ class AddressCacheConcurrencyTest extends AsyncFunSuite {
 
   test("`take` is locking when queue is empty and unlocking on `add`") {
     val addr = InetAddress.getLoopbackAddress
-    val cache = new AddressCache(1, TimeUnit.SECONDS)
+    val cache = new AddressCacheExpiring(1, TimeUnit.SECONDS)
 
     val promise: Promise[InetAddress] = Promise()
 
@@ -30,7 +31,7 @@ class AddressCacheConcurrencyTest extends AsyncFunSuite {
 
   test("All locks successfully released") {
     val numThreads = 256
-    val cache = new AddressCache(1, TimeUnit.SECONDS)
+    val cache = new AddressCacheExpiring(1, TimeUnit.SECONDS)
 
     val readersLatch = new CountDownLatch(numThreads)
     val writersLatch = new CountDownLatch(numThreads)
@@ -54,7 +55,7 @@ class AddressCacheConcurrencyTest extends AsyncFunSuite {
 
   test("All thread blocked and then locks successfully released") {
     val numThreads = 256
-    val cache = new AddressCache(1, TimeUnit.SECONDS)
+    val cache = new AddressCacheExpiring(1, TimeUnit.SECONDS)
 
     val readersLatch = new CountDownLatch(numThreads)
     val writersLatch = new CountDownLatch(numThreads)
@@ -87,7 +88,7 @@ class AddressCacheConcurrencyTest extends AsyncFunSuite {
 
   test("Concurrent `add` doesn't produce duplicates") {
     val numThreads = 256
-    val cache = new AddressCache(1, TimeUnit.SECONDS)
+    val cache = new AddressCacheExpiring(1, TimeUnit.SECONDS)
 
     val writersLatch = new CountDownLatch(numThreads)
     for (i <- 0 until numThreads) {

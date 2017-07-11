@@ -1,22 +1,25 @@
 import java.net.InetAddress
+
 import org.scalatest.FunSuite
 import java.util.concurrent.TimeUnit
+
+import model.AddressCacheExpiring
 
 
 class AddressCacheTest extends FunSuite {
 
   test("TTL should be positive value") {
     assertThrows[IllegalArgumentException] {
-      val cache = new AddressCache(-5, TimeUnit.SECONDS)
+      val cache = new AddressCacheExpiring(-5, TimeUnit.SECONDS)
     }
     assertThrows[IllegalArgumentException] {
-      val cache = new AddressCache(0, TimeUnit.SECONDS)
+      val cache = new AddressCacheExpiring(0, TimeUnit.SECONDS)
     }
   }
 
   test("Address cache adds object successfully") {
     val addr = InetAddress.getLoopbackAddress
-    val cache = new AddressCache(5, TimeUnit.SECONDS)
+    val cache = new AddressCacheExpiring(5, TimeUnit.SECONDS)
 
     assert(cache.add(addr) === true)
     assert(cache.peek().isDefined)
@@ -25,7 +28,7 @@ class AddressCacheTest extends FunSuite {
 
   test("Address cache ignore same object added twice") {
     val addr = InetAddress.getLoopbackAddress
-    val cache = new AddressCache(5, TimeUnit.SECONDS)
+    val cache = new AddressCacheExpiring(5, TimeUnit.SECONDS)
 
     cache.add(addr)
     assert(cache.add(addr) === false)
@@ -36,7 +39,7 @@ class AddressCacheTest extends FunSuite {
   test("Address cache ignore object with same address added twice") {
     val addr = InetAddress.getByAddress(Array[Byte](0x7f, 0x00, 0x00, 0x03))
     val addr2 = InetAddress.getByAddress(Array[Byte](0x7f, 0x00, 0x00, 0x03))
-    val cache = new AddressCache(5, TimeUnit.SECONDS)
+    val cache = new AddressCacheExpiring(5, TimeUnit.SECONDS)
 
     cache.add(addr)
     assert(cache.add(addr2) === false)
@@ -46,7 +49,7 @@ class AddressCacheTest extends FunSuite {
 
   test("Address cache removes object successfully") {
     val addr = InetAddress.getLoopbackAddress
-    val cache = new AddressCache(5, TimeUnit.SECONDS)
+    val cache = new AddressCacheExpiring(5, TimeUnit.SECONDS)
 
     cache.add(addr)
     assert(cache.peek().isDefined)
@@ -55,14 +58,14 @@ class AddressCacheTest extends FunSuite {
   }
 
   test("peek returns None on empty cache") {
-    val cache = new AddressCache(5, TimeUnit.SECONDS)
+    val cache = new AddressCacheExpiring(5, TimeUnit.SECONDS)
     assert(cache.peek().isEmpty)
   }
 
   test("peek returns last added element if any") {
     val addr = InetAddress.getLoopbackAddress
     val addr2 = InetAddress.getByAddress(Array[Byte](0x7f, 0x00, 0x00, 0x02))
-    val cache = new AddressCache(5, TimeUnit.SECONDS)
+    val cache = new AddressCacheExpiring(5, TimeUnit.SECONDS)
     cache.add(addr)
     cache.add(addr2)
     assert(cache.peek().isDefined)
@@ -72,7 +75,7 @@ class AddressCacheTest extends FunSuite {
   test("take returns last added element") {
     val addr = InetAddress.getLoopbackAddress
     val addr2 = InetAddress.getByAddress(Array[Byte](0x7f, 0x00, 0x00, 0x02))
-    val cache = new AddressCache(5, TimeUnit.SECONDS)
+    val cache = new AddressCacheExpiring(5, TimeUnit.SECONDS)
     cache.add(addr)
     cache.add(addr2)
     assert(cache.take() === addr2)
@@ -81,7 +84,7 @@ class AddressCacheTest extends FunSuite {
   test("take removes last added element") {
     val addr = InetAddress.getLoopbackAddress
     val addr2 = InetAddress.getByAddress(Array[Byte](0x7f, 0x00, 0x00, 0x02))
-    val cache = new AddressCache(5, TimeUnit.SECONDS)
+    val cache = new AddressCacheExpiring(5, TimeUnit.SECONDS)
     cache.add(addr)
     cache.add(addr2)
     cache.take()
