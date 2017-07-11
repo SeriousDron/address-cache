@@ -154,7 +154,9 @@ class AddressCache(maxAge: Long, unit: TimeUnit) extends Cache[InetAddress] {
   protected def cleanAll(): Unit = {
     rwLock.writeLock().lock()
     try {
-      items.clear()
+      if (items.nonEmpty && items.last.isExpired) {
+        items.clear()
+      }
     } finally {
       rwLock.writeLock().unlock()
     }
