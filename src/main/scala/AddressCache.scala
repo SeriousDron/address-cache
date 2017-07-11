@@ -130,9 +130,11 @@ class AddressCache(maxAge: Long, unit: TimeUnit) extends Cache[InetAddress] {
 
   /** Returns and removes last element added to cache. Blocks in case cache is empty until first element to come */
   override def take(): InetAddress = {
-    def allExpiredWithClean: Boolean = if (items.last.isExpired) {
-      cleanAll(); true
-    } else false
+    def allExpiredWithClean: Boolean =
+      if (items.last.isExpired) {
+        cleanAll()
+        true
+      } else false
 
     rwLock.writeLock().lock()
     try {
