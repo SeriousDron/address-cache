@@ -1,8 +1,9 @@
+package model
+
 import java.lang.Thread.State
 import java.net.InetAddress
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 
-import model.AddressCacheExpiring
 import org.scalatest.AsyncFunSuite
 
 import scala.concurrent.{Future, Promise}

@@ -1,9 +1,9 @@
-import java.net.InetAddress
+package model
 
-import org.scalatest.FunSuite
+import java.net.InetAddress
 import java.util.concurrent.TimeUnit
 
-import model.AddressCacheExpiring
+import org.scalatest.FunSuite
 
 
 class AddressCacheTest extends FunSuite {

@@ -1,8 +1,9 @@
+package model
+
 import java.lang.Thread.State
 import java.net.InetAddress
 import java.util.concurrent.TimeUnit
 
-import model.AddressCacheExpiring
 import org.scalatest.FunSuite
 
 import scala.concurrent.duration.Duration
