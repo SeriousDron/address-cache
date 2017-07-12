@@ -14,7 +14,7 @@ import play.api.http.HeaderNames
 import play.api.libs.json._
 
 import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, Future}
+import scala.concurrent.{Await, ExecutionContext, Future}
 
 class ApiControllerTest extends PlaySpec with GuiceOneAppPerSuite with BeforeAndAfter {
 
@@ -27,7 +27,10 @@ class ApiControllerTest extends PlaySpec with GuiceOneAppPerSuite with BeforeAnd
     synchronized {
       cachePerTest = new AddressCacheExpiring(2, TimeUnit.SECONDS)
       val components = app.injector.instanceOf(classOf[ControllerComponents])
-      controllerPerTest = new ApiController(components, cachePerTest)
+      val contexts = new Contexts {
+        val addressCacheContext: ExecutionContext = ExecutionContext.Implicits.global
+      }
+      controllerPerTest = new ApiController(contexts, components, cachePerTest)
     }
   }
 
@@ -126,6 +129,14 @@ class ApiControllerTest extends PlaySpec with GuiceOneAppPerSuite with BeforeAnd
       assert(contentAsString(result) === "")
       assert(cache.peek().isEmpty)
     }
+
+    "400 on incorrect ip address" in {
+      val result = controller.remove.apply(requestWithBody(action = routes.ApiController.remove(), version = 5))
+      assert(status(result) === 400)
+      assert(contentAsJson(result) === JsObject(Map(
+        "status" -> JsString("badrequest")
+      )))
+    }
   }
 
   "Api#take" should {
@@ -137,19 +148,14 @@ class ApiControllerTest extends PlaySpec with GuiceOneAppPerSuite with BeforeAnd
     }
 
     "wait in case cache is empty" in {
-      import scala.concurrent.ExecutionContext.Implicits.global
-
-      val future = Future {
-        controller.take.apply(FakeRequest(routes.ApiController.take()))
-      }
+      val future = controller.take.apply(FakeRequest(routes.ApiController.take()))
       Thread.sleep(50)
       assert(future.isCompleted === false)
       cache.add(localhostV4)
       Thread.sleep(50)
       assert(future.isCompleted)
-      val result = Await.result(future, Duration(100, TimeUnit.MILLISECONDS))
-      assert(status(result) === 200)
-      assert(contentAsJson(result) === localhostV4Json)
+      assert(status(future) === 200)
+      assert(contentAsJson(future) === localhostV4Json)
     }
   }
 

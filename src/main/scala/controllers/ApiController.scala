@@ -8,6 +8,8 @@ import play.api.i18n.I18nSupport
 import play.api.libs.json.{JsValue, Json}
 import play.api.mvc._
 
+import scala.concurrent.Future
+
 /** Address cache API controller. Provides add, remove, peek and take operations on cache
  *
  * @author Andrey Petrenko
@@ -15,18 +17,24 @@ import play.api.mvc._
  * @param components Controller helper components
  * @param cache      Address cache instance to work with
  */
-class ApiController @Inject()(components: ControllerComponents, cache: AddressCache)
-  extends AbstractController(components) with I18nSupport {
+class ApiController @Inject()(
+  contexts: Contexts,
+  components: ControllerComponents,
+  cache: AddressCache) extends AbstractController(components) with I18nSupport {
+
+  implicit val addressCacheContext = contexts.addressCacheContext
 
   /** Returns last added address or 204
    *
    * @return
    */
-  def peek = Action {
-    cache.peek() match {
-      case Some(address) => Ok(Json.toJson(address))
-      case _ => NoContent
-    }
+  def peek = Action.async {
+    Future {
+      cache.peek() match {
+        case Some(address) => Ok(Json.toJson(address))
+        case _ => NoContent
+      }
+    }(addressCacheContext)
   }
 
   /** Adds an address to the cache and returns result status
@@ -34,18 +42,20 @@ class ApiController @Inject()(components: ControllerComponents, cache: AddressCa
    * In case of invalid JSON or address returns 401 with {"status":"badrequest"}
    *
    */
-  def add = Action(parse.tolerantJson) { request: Request[JsValue] =>
+  def add = Action.async(parse.tolerantJson) { request: Request[JsValue] =>
     val jsAddress = request.body.validate[InetAddress]
     jsAddress.fold(
       errors => {
-        BadRequest(Json.obj("status" -> "badrequest"))
+        Future.successful(BadRequest(Json.obj("status" -> "badrequest")))
       },
       address => {
-        if (cache.add(address)) {
-          Created(Json.obj("status" -> "added"))
-        } else {
-          Ok(Json.obj("status" -> "exists"))
-        }
+        Future {
+          if (cache.add(address)) {
+            Created(Json.obj("status" -> "added"))
+          } else {
+            Ok(Json.obj("status" -> "exists"))
+          }
+        }(addressCacheContext)
       }
     )
   }
@@ -55,15 +65,17 @@ class ApiController @Inject()(components: ControllerComponents, cache: AddressCa
    * In case of invalid JSON or address returns 401 with {"status":"badrequest"}
    *
    */
-  def remove = Action(parse.tolerantJson) { request: Request[JsValue] =>
+  def remove = Action.async(parse.tolerantJson) { request: Request[JsValue] =>
     val jsAddress = request.body.validate[InetAddress]
     jsAddress.fold(
       errors => {
-        BadRequest(Json.obj("status" -> "badrequest"))
+        Future.successful(BadRequest(Json.obj("status" -> "badrequest")))
       },
       address => {
-        cache.remove(address)
-        NoContent
+        Future {
+          cache.remove(address)
+          NoContent
+        }(addressCacheContext)
       }
     )
   }
@@ -71,8 +83,9 @@ class ApiController @Inject()(components: ControllerComponents, cache: AddressCa
   /** Returns and removes last address. Blocks and waits if the cache is empty
    *
    */
-  def take = Action {
-    Ok(Json.toJson(cache.take()))
+  def take = Action.async {
+    Future {
+      Ok(Json.toJson(cache.take()))
+    }(addressCacheContext)
   }
-
 }
