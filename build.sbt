@@ -12,3 +12,5 @@ lazy val root = (project in file("."))
 disablePlugins(PlayLayoutPlugin)
 libraryDependencies += guice
 libraryDependencies += "org.scalatestplus.play" %% "scalatestplus-play" % "3.1.0" % "test"
+
+coverageExcludedPackages := """controllers\..*Reverse.*;router.Routes.*;"""
