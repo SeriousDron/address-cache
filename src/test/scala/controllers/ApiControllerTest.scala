@@ -13,7 +13,8 @@ import org.scalatestplus.play.guice.GuiceOneAppPerSuite
 import play.api.http.HeaderNames
 import play.api.libs.json._
 
-import scala.concurrent.Future
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, Future}
 
 class ApiControllerTest extends PlaySpec with GuiceOneAppPerSuite with BeforeAndAfter {
 
@@ -30,55 +31,41 @@ class ApiControllerTest extends PlaySpec with GuiceOneAppPerSuite with BeforeAnd
     }
   }
 
-  private def localhostV4 = {
-    InetAddress.getByAddress("localhost", Array[Byte](127, 0, 0, 1))
-  }
-  private def localhostV6 = {
-    InetAddress.getByAddress("localhost", Array[Byte](0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,1))
-  }
-
   "Api#peek" should {
-    "returns 204 on empty cache" in {
-      val result: Future[Result] = controller.peek.apply(FakeRequest(GET, "/v1/addresses"))
+    "return 204 on empty cache" in {
+      val result: Future[Result] = controller.peek.apply(FakeRequest(routes.ApiController.peek()))
       assert(status(result) === 204)
       assert(contentAsString(result) === "")
     }
 
-    "returns InetAddress converted to json on nonEmpty cache" in {
+    "return InetAddress converted to json on nonEmpty cache" in {
       cache.add(localhostV4)
 
-      val result: Future[Result] = controller.peek.apply(FakeRequest(GET, "/v1/addresses"))
+      val result: Future[Result] = controller.peek.apply(FakeRequest(routes.ApiController.peek()))
       assert(status(result) === 200)
-      assert(contentAsJson(result) === JsObject(Map(
-      "version" -> JsNumber(4),
-      "host" -> JsString("localhost"),
-      "address" -> JsArray(Seq(JsNumber(127), JsNumber(0), JsNumber(0), JsNumber(1)))
-      )))
+      assert(contentAsJson(result) === localhostV4Json)
     }
   }
 
-
   "Api#add" should {
-    "returns 400 on incorrect IP version" in {
-      val result: Future[Result] = controller.add.apply(postRequest(version = 5))
+    "return 400 on incorrect IP version" in {
+      val result: Future[Result] = controller.add.apply(requestWithBody(version = 5))
       assert(status(result) === 400)
       assert(contentAsJson(result) === JsObject(Map(
         "status" -> JsString("badrequest")
       )))
     }
 
-    "returns 400 on incorrect IP address" in {
-      val result: Future[Result] = controller.add.apply(postRequest(address = Seq(127, 0, 0, 1, 1)))
+    "return 400 on incorrect IP address" in {
+      val result: Future[Result] = controller.add.apply(requestWithBody(address = Seq(127, 0, 0, 1, 1)))
       assert(status(result) === 400)
       assert(contentAsJson(result) === JsObject(Map(
         "status" -> JsString("badrequest")
       )))
-
-
     }
 
-    "returns 201 on successful adding IPv4 address" in {
-      val result: Future[Result] = controller.add.apply(postRequest())
+    "return 201 on successful adding IPv4 address" in {
+      val result: Future[Result] = controller.add.apply(requestWithBody())
       assert(status(result) === 201)
       assert(contentAsJson(result) === JsObject(Map(
         "status" -> JsString("added")
@@ -86,18 +73,21 @@ class ApiControllerTest extends PlaySpec with GuiceOneAppPerSuite with BeforeAnd
       assert(cache.peek().isDefined && cache.peek().get == localhostV4)
     }
 
-    "returns 200 on adding duplicate IPv4 address" in {
+    "return 200 on adding duplicate IPv4 address" in {
       cache.add(localhostV4)
 
-      val result: Future[Result] = controller.add.apply(postRequest())
+      val result: Future[Result] = controller.add.apply(requestWithBody())
       assert(status(result) === 200)
       assert(contentAsJson(result) === JsObject(Map(
         "status" -> JsString("exists")
       )))
     }
 
-    "returns 201 on successful adding IPv6 address" in {
-      val result: Future[Result] = controller.add.apply(postRequest(6, Seq(0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,1)))
+    "return 201 on successful adding IPv6 address" in {
+      val result: Future[Result] = controller.add.apply(requestWithBody(
+        version = 6,
+        address =Seq(0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,1)
+      ))
       assert(status(result) === 201)
       assert(contentAsJson(result) === JsObject(Map(
         "status" -> JsString("added")
@@ -105,10 +95,13 @@ class ApiControllerTest extends PlaySpec with GuiceOneAppPerSuite with BeforeAnd
       assert(cache.peek().isDefined && cache.peek().get === localhostV6)
     }
 
-    "returns 200 on adding duplicate IPv6 address" in {
+    "return 200 on adding duplicate IPv6 address" in {
       cache.add(localhostV6)
 
-      val result: Future[Result] = controller.add.apply(postRequest(6, Seq(0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,1)))
+      val result: Future[Result] = controller.add.apply(requestWithBody(
+        version = 6,
+        address = Seq(0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,1)
+      ))
       assert(status(result) === 200)
       assert(contentAsJson(result) === JsObject(Map(
         "status" -> JsString("exists")
@@ -116,13 +109,72 @@ class ApiControllerTest extends PlaySpec with GuiceOneAppPerSuite with BeforeAnd
     }
   }
 
-  private def postRequest(version: Int = 4, address: Seq[Int] = Seq[Int](127, 0, 0, 1)) = {
-    FakeRequest(POST, "/v1/addresses", FakeHeaders(Seq(HeaderNames.HOST -> "localhost")),
+  "Api#remove" should {
+    "remove an address and returns 204" in {
+      cache.add(localhostV4)
+      val result = controller.remove.apply(requestWithBody(action = routes.ApiController.remove()))
+
+      assert(status(result) === 204)
+      assert(contentAsString(result) === "")
+      assert(cache.peek().isEmpty)
+    }
+
+    "return 204 when address does not exist" in {
+      assert(cache.peek().isEmpty)
+      val result = controller.remove.apply(requestWithBody(action = routes.ApiController.remove()))
+      assert(status(result) === 204)
+      assert(contentAsString(result) === "")
+      assert(cache.peek().isEmpty)
+    }
+  }
+
+  "Api#take" should {
+    "return last added element as JSON" in {
+      cache.add(localhostV4)
+      val result = controller.take.apply(FakeRequest(routes.ApiController.take()))
+      assert(status(result) === 200)
+      assert(contentAsJson(result) === localhostV4Json)
+    }
+
+    "wait in case cache is empty" in {
+      import scala.concurrent.ExecutionContext.Implicits.global
+
+      val future = Future {
+        controller.take.apply(FakeRequest(routes.ApiController.take()))
+      }
+      Thread.sleep(50)
+      assert(future.isCompleted === false)
+      cache.add(localhostV4)
+      Thread.sleep(50)
+      assert(future.isCompleted)
+      val result = Await.result(future, Duration(100, TimeUnit.MILLISECONDS))
+      assert(status(result) === 200)
+      assert(contentAsJson(result) === localhostV4Json)
+    }
+  }
+
+  private def requestWithBody(action: Call = routes.ApiController.add(), version: Int = 4, address: Seq[Int] = Seq[Int](127, 0, 0, 1)) = {
+    FakeRequest(action.method, action.url, FakeHeaders(Seq(HeaderNames.HOST -> "localhost")),
       JsObject(Map(
         "version" -> JsNumber(version), //Incorrect version
         "host" -> JsString("localhost"),
         "address" -> JsArray(address.map(JsNumber(_)))
       ))
     )
+  }
+
+  private def localhostV4Json = {
+    JsObject(Map(
+      "version" -> JsNumber(4),
+      "host" -> JsString("localhost"),
+      "address" -> JsArray(Seq(JsNumber(127), JsNumber(0), JsNumber(0), JsNumber(1)))
+    ))
+  }
+
+  private def localhostV4 = {
+    InetAddress.getByAddress("localhost", Array[Byte](127, 0, 0, 1))
+  }
+  private def localhostV6 = {
+    InetAddress.getByAddress("localhost", Array[Byte](0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,1))
   }
 }
