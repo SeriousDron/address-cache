@@ -1,0 +1,4 @@
+GET     /v1/addresses                   controllers.ApiController.peek()
+POST    /v1/addresses                   controllers.ApiController.add()
+PATCH   /v1/addresses                   controllers.ApiController.remove()
+POST    /v1/addresses/take              controllers.ApiController.take()
